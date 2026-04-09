@@ -77,6 +77,29 @@ body {
   }
 }
 
+/*
+ * Prevent iOS Safari focus auto-zoom.
+ *
+ * iOS zooms the entire page when an input/textarea/select is focused and its
+ * computed font-size is < 16px. The zoom is disorienting, breaks layout, and
+ * does not auto-undo on blur. The fix is to force the form-control font-size
+ * to 16px on touch viewports. We scope this to ≤640px so desktop typography
+ * stays exactly as designed.
+ *
+ * Touch target sizing (44×44 minimum per iOS HIG) is intentionally NOT a
+ * global rule here — applying it via `min-height: 44px` to all buttons/links
+ * shreds dense card layouts. Instead, we audit per component during the
+ * mobile sweep and only enlarge controls that are actually too small for
+ * touch.
+ */
+@media (max-width: 640px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -93,6 +116,18 @@ h1, h2, h3, h4, h5, h6 {
 /* Mono font */
 .font-mono {
   font-family: 'JetBrains Mono', 'IBM Plex Mono', 'Menlo', monospace;
+}
+
+/* Text selection — explicit, high-contrast on dark background.
+   Browser defaults are nearly invisible against the StaffML terminal palette,
+   so we use the accent blue at high opacity with a forced foreground color. */
+::selection {
+  background-color: rgba(56, 139, 253, 0.55);
+  color: #ffffff;
+}
+::-moz-selection {
+  background-color: rgba(56, 139, 253, 0.55);
+  color: #ffffff;
 }
 
 /* Prose blocks */

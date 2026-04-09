@@ -30,6 +30,17 @@ export function getQuestions(): Question[] {
   return questions;
 }
 
+/**
+ * Marketing-friendly question count string. Rounds the live corpus length
+ * down to the nearest thousand and appends a `+` so the headline never goes
+ * stale until the next 1,000-question milestone is crossed. Used in page
+ * metadata, OG descriptions, and hero copy as a single source of truth so
+ * we never have to chase hardcoded counts in five different files again.
+ *
+ * Example: corpus length 8,053 → "8,000+"
+ */
+export const QUESTION_COUNT_DISPLAY = `${(Math.floor(questions.length / 1000) * 1000).toLocaleString("en-US")}+`;
+
 export function getQuestionById(id: string): Question | undefined {
   return questions.find((q) => q.id === id);
 }
@@ -242,6 +253,32 @@ export function cleanScenario(text: string): string {
     .replace(/^"/,'')
     .replace(/"$/,'')
     .trim();
+}
+
+// ─── Answer-type inference ──────────────────────────────────
+// TODO(answer_type): replace this heuristic with an explicit
+// `answer_type: 'numeric' | 'recall' | 'conceptual' | 'design'`
+// field on every question in the corpus. Until then, infer from
+// the scenario text. The bias is conservative: only classify as
+// numeric when we're confident, so the grader can never fire on
+// a recall question like "What does NPU stand for?".
+const QUANT_VERBS = /\b(estimate|calculate|compute|how (?:many|much|long|fast|big)|what(?:'s| is) the (?:size|bandwidth|throughput|latency|memory|cost|time|number|ratio)|derive|approximate)\b/i;
+const HAS_DIGIT = /\d/;
+const QUESTION_MARK = /\?/;
+
+export function isNumericQuestion(question: { scenario: string; details: { napkin_math?: string } }): boolean {
+  // Required: the corpus has napkin math AND that napkin math contains a number
+  if (!question.details.napkin_math) return false;
+  if (extractFinalNumber(question.details.napkin_math) === null) return false;
+
+  // Required: the prompt itself either contains a quantitative verb,
+  // or shows a digit alongside a question mark (a typical numeric ask).
+  const scenario = question.scenario || '';
+  if (QUANT_VERBS.test(scenario)) return true;
+  if (HAS_DIGIT.test(scenario) && QUESTION_MARK.test(scenario)) return true;
+
+  // Defensive default: not numeric. Falls back to self-rate.
+  return false;
 }
 
 // Extract the user's final answer number
