@@ -196,17 +196,17 @@
             "contributions": []
         },
         {
+            "login": "farhan523",
+            "name": "Farhan Asghar",
+            "avatar_url": "https://avatars.githubusercontent.com/farhan523",
+            "profile": "https://github.com/farhan523",
+            "contributions": []
+        },
+        {
             "login": "DivyaAmirtharaj",
             "name": "Divya Amirtharaj",
             "avatar_url": "https://avatars.githubusercontent.com/DivyaAmirtharaj",
             "profile": "https://github.com/DivyaAmirtharaj",
-            "contributions": []
-        },
-        {
-            "login": "srivatsankrishnan",
-            "name": "Srivatsan Krishnan",
-            "avatar_url": "https://avatars.githubusercontent.com/srivatsankrishnan",
-            "profile": "https://github.com/srivatsankrishnan",
             "contributions": []
         },
         {
@@ -217,17 +217,10 @@
             "contributions": []
         },
         {
-            "login": "arnaumarin",
-            "name": "marin-llobet",
-            "avatar_url": "https://avatars.githubusercontent.com/arnaumarin",
-            "profile": "https://github.com/arnaumarin",
-            "contributions": []
-        },
-        {
-            "login": "farhan523",
-            "name": "Farhan Asghar",
-            "avatar_url": "https://avatars.githubusercontent.com/farhan523",
-            "profile": "https://github.com/farhan523",
+            "login": "srivatsankrishnan",
+            "name": "Srivatsan Krishnan",
+            "avatar_url": "https://avatars.githubusercontent.com/srivatsankrishnan",
+            "profile": "https://github.com/srivatsankrishnan",
             "contributions": []
         },
         {
@@ -235,6 +228,13 @@
             "name": "Aghyad Deeb",
             "avatar_url": "https://avatars.githubusercontent.com/aptl26",
             "profile": "https://github.com/aptl26",
+            "contributions": []
+        },
+        {
+            "login": "arnaumarin",
+            "name": "marin-llobet",
+            "avatar_url": "https://avatars.githubusercontent.com/arnaumarin",
+            "profile": "https://github.com/arnaumarin",
             "contributions": []
         },
         {
