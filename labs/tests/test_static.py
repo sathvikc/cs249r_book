@@ -265,3 +265,272 @@ class TestWASMCompatibility:
                         f"WASM-incompatible import 'from {node.module}' at line {node.lineno}. "
                         f"This package is not available in Pyodide."
                     )
+
+
+# Packages installed at runtime via `await micropip.install([...])` in WASM.
+# Importing these BEFORE the micropip install line causes a silent
+# ModuleNotFoundError that only surfaces when the lab is actually loaded
+# in a browser (existing CI misses it because test_engine runs in native
+# Python where these packages are installed at the OS level).
+#
+# Incident: lab_05_dist_train shipped with `from plotly.subplots import
+# make_subplots` at line 55, BEFORE `await micropip.install([..., "plotly",
+# ...])` at line 60. All cells downstream of the setup cell cascaded with
+# "ancestor raised" errors on the production dev preview site. marimo
+# check, test_engine, test_static, and the WASM smoke test all passed.
+# Only a real browser caught it. This test catches that class of bug at
+# static analysis time.
+RUNTIME_INSTALLED_PACKAGES = frozenset({
+    "plotly",
+    "pydantic",
+    "pint",
+    "pandas",
+    "mlsysim",
+})
+
+
+def _find_micropip_install_line(cell_body):
+    """Return the line number of the `await micropip.install(...)` call
+    in this cell's body, or None if not found."""
+    for stmt in ast.walk(ast.Module(body=cell_body, type_ignores=[])):
+        # Match `await micropip.install(...)` — an Await wrapping a Call
+        if isinstance(stmt, ast.Await) and isinstance(stmt.value, ast.Call):
+            call = stmt.value
+            if (isinstance(call.func, ast.Attribute)
+                and call.func.attr == "install"
+                and isinstance(call.func.value, ast.Name)
+                and call.func.value.id == "micropip"):
+                return stmt.lineno
+    return None
+
+
+class TestWASMRuntimeImportOrder:
+    """Runtime-installed packages must be imported AFTER micropip.install.
+
+    In WASM (Pyodide), packages like plotly and mlsysim are not part of
+    the base distribution. They're installed at runtime via micropip
+    inside the setup cell. Any top-level `import` of those packages that
+    appears BEFORE the `await micropip.install(...)` line will fail with
+    ModuleNotFoundError on the first load, cascading "ancestor raised"
+    errors through every downstream cell.
+
+    This bug class is invisible to native-python tests (test_engine runs
+    in an environment where plotly is already installed) and to the CI
+    WASM smoke test (which only checks that export produced a >10k file).
+    Only a real browser catches it. This static check catches it first.
+    """
+
+    def test_runtime_packages_imported_after_micropip_install(self, lab_path):
+        source = read_source(lab_path)
+        tree = ast.parse(source)
+
+        # Find each @app.cell function. For each, check if it contains
+        # a micropip.install call AND a runtime-installed import before it.
+        violations = []
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            # Must be @app.cell decorated
+            has_cell_dec = any(
+                (isinstance(d, ast.Attribute) and isinstance(d.value, ast.Name)
+                 and d.value.id == "app" and d.attr == "cell")
+                or (isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute)
+                    and isinstance(d.func.value, ast.Name)
+                    and d.func.value.id == "app" and d.func.attr == "cell")
+                for d in node.decorator_list
+            )
+            if not has_cell_dec:
+                continue
+
+            # Does this cell have a micropip.install call?
+            install_line = _find_micropip_install_line(node.body)
+            if install_line is None:
+                continue
+
+            # Scan cell body for runtime-installed package imports
+            # that appear BEFORE the micropip install line.
+            for sub in ast.walk(node):
+                if isinstance(sub, ast.Import):
+                    for alias in sub.names:
+                        root = alias.name.split(".")[0]
+                        if root in RUNTIME_INSTALLED_PACKAGES and sub.lineno < install_line:
+                            violations.append(
+                                f"line {sub.lineno}: import {alias.name} "
+                                f"(before micropip.install at line {install_line})"
+                            )
+                elif isinstance(sub, ast.ImportFrom) and sub.module:
+                    root = sub.module.split(".")[0]
+                    if root in RUNTIME_INSTALLED_PACKAGES and sub.lineno < install_line:
+                        violations.append(
+                            f"line {sub.lineno}: from {sub.module} import ... "
+                            f"(before micropip.install at line {install_line})"
+                        )
+
+        if violations:
+            pytest.fail(
+                "runtime-installed packages imported before micropip.install "
+                "(will ModuleNotFoundError on WASM/Pyodide load):\n"
+                + "\n".join(f"  {v}" for v in violations)
+                + "\n\nfix: move the import(s) to AFTER the "
+                "`await micropip.install([..., 'plotly', ...])` line. "
+                "see lab_05_dist_train post-#1353 for the correct pattern."
+            )
+
+
+# ── Test: Marimo Dataflow ────────────────────────────────────────────────────
+
+def _has_app_cell_decorator(func):
+    """True if the function is decorated with @app.cell or @app.cell(...)."""
+    for dec in func.decorator_list:
+        if isinstance(dec, ast.Attribute) and isinstance(dec.value, ast.Name):
+            if dec.value.id == "app" and dec.attr == "cell":
+                return True
+        if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Attribute):
+            if (
+                isinstance(dec.func.value, ast.Name)
+                and dec.func.value.id == "app"
+                and dec.func.attr == "cell"
+            ):
+                return True
+    return False
+
+
+def _is_mo_stop_call(stmt):
+    """True if stmt is an expression statement calling mo.stop(...)."""
+    if not isinstance(stmt, ast.Expr) or not isinstance(stmt.value, ast.Call):
+        return False
+    func = stmt.value.func
+    return (
+        isinstance(func, ast.Attribute)
+        and isinstance(func.value, ast.Name)
+        and func.value.id == "mo"
+        and func.attr == "stop"
+    )
+
+
+def _is_mo_ui_assign(stmt):
+    """If stmt is `<name> = mo.ui.<widget>(...)`, return the name. Else None."""
+    if not isinstance(stmt, ast.Assign) or len(stmt.targets) != 1:
+        return None
+    target = stmt.targets[0]
+    if not isinstance(target, ast.Name) or not isinstance(stmt.value, ast.Call):
+        return None
+    func = stmt.value.func
+    while isinstance(func, ast.Attribute):
+        if (
+            isinstance(func.value, ast.Attribute)
+            and isinstance(func.value.value, ast.Name)
+            and func.value.value.id == "mo"
+            and func.value.attr == "ui"
+        ):
+            return target.id
+        func = func.value if isinstance(func.value, ast.Attribute) else None
+        if func is None:
+            break
+    return None
+
+
+def _returned_names(func):
+    """Names listed in the cell's return statement."""
+    for node in ast.walk(func):
+        if isinstance(node, ast.Return) and node.value is not None:
+            if isinstance(node.value, ast.Tuple):
+                return {elt.id for elt in node.value.elts if isinstance(elt, ast.Name)}
+            if isinstance(node.value, ast.Name):
+                return {node.value.id}
+    return set()
+
+
+class TestMarimoDataflow:
+    """Detect the MULTI-widget-in-gated-cell anti-pattern.
+
+    The sequential-unlock idiom used across the labs is:
+
+        @app.cell
+        def _(mo, partA_prediction):
+            mo.stop(partA_prediction.value is None, mo.md("..."))
+            partB_prediction = mo.ui.radio(...)
+            return (partB_prediction,)
+
+    This works: gate fires while partA is unanswered, user sees the
+    unlock message. Once partA is answered, partB_prediction is defined
+    and the next gated cell unblocks. Each gated cell exposes exactly
+    ONE next widget. The idiom is used throughout lab_02 through lab_16
+    and is verified working by test_engine.py.
+
+    The BUG (originally in lab_01, fixed by #1339) is when a single
+    gated cell defines MULTIPLE widgets:
+
+        @app.cell
+        def _(mo, partA_prediction):
+            mo.stop(partA_prediction.value is None, mo.md("..."))
+            partA_instrument = mo.ui.slider(...)  # Part A's own instrument
+            partB_prediction = mo.ui.radio(...)    # Next part's prediction
+            partB_instrument = mo.ui.slider(...)  # Next part's instrument too
+            return (partA_instrument, partB_prediction, partB_instrument)
+
+    When this cell's gate fires, THREE widgets go undefined. Downstream
+    cells that depend on any of them also fail. The cascade is what
+    breaks the lab visually, not the gate itself.
+
+    This test flags only cells that leak TWO OR MORE widgets to the
+    return tuple. Single-widget leaks (the sequential-unlock idiom)
+    are allowed.
+    """
+
+    # Labs with known multi-widget-leak debt, grandfathered until refactored
+    # per-lab (tracked in #1347). As each lab is converted to the
+    # one-widget-per-gated-cell pattern (see lab_01 post-#1339 or lab_05_dist_train),
+    # remove it from this set. When the set is empty the bug class is closed.
+    # Only vol1/lab_00 remains. Its check1/check2/check3 pattern is structurally
+    # different from the partX_prediction idiom and the mechanical Pattern C
+    # transformation breaks test_engine.py. Needs manual per-cell refactor.
+    _KNOWN_MULTI_LEAK_LABS = frozenset({
+        "vol1/lab_00_introduction.py",
+    })
+
+    def test_no_multi_widget_leak_in_gated_cell(self, lab_path):
+        # Grandfather known-debt labs: skip with a pointer to the tracking issue
+        # rather than fail. New labs and labs that have been refactored are
+        # strictly enforced.
+        rel_path = str(Path(lab_path).resolve().relative_to(REPO_ROOT / "labs"))
+        if rel_path in self._KNOWN_MULTI_LEAK_LABS:
+            pytest.skip(
+                f"{rel_path} has known multi-widget-leak debt, tracked in #1347. "
+                "remove from _KNOWN_MULTI_LEAK_LABS once refactored to the "
+                "one-widget-per-gated-cell pattern."
+            )
+
+        tree = parse_tree(lab_path)
+        violations = []
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if not _has_app_cell_decorator(node):
+                continue
+            if not any(_is_mo_stop_call(s) for s in node.body):
+                continue
+            widgets_defined = {}
+            for s in node.body:
+                name = _is_mo_ui_assign(s)
+                if name is not None:
+                    widgets_defined[name] = s.lineno
+            leaked = widgets_defined.keys() & _returned_names(node)
+            # Single-widget leaks are the sequential-unlock idiom and are allowed.
+            # Only flag cells that leak two or more widgets through the gate.
+            if len(leaked) >= 2:
+                violations.append((node.lineno, sorted(leaked)))
+
+        if violations:
+            summary = "\n".join(
+                f"  cell at line {line}: gated AND leaks {len(names)} widgets {names}"
+                for line, names in violations
+            )
+            pytest.fail(
+                "multi-widget leak in gated cell (downstream cascade failure):\n"
+                + summary
+                + "\n\nfix: split the cell so each gated cell defines at most ONE "
+                "new widget. see vol1/lab_01_ml_intro.py (post-#1339) for the "
+                "canonical pattern: each gated cell returns only the next "
+                "prediction widget."
+            )

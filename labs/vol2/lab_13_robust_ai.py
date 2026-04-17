@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.19.6"
+__generated_with = "0.23.1"
 app = marimo.App(width="full")
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -60,7 +60,7 @@ async def _():
 
     ledger = DesignLedger()
     if getattr(ledger, "is_wasm", False):
-        await ledger.load_async()
+        _ = await ledger.load_async()
 
     # ── Hardware from registry (Cloud + Edge tiers) ─────────────────────────
     _cloud = Hardware.Cloud.H100
@@ -283,9 +283,7 @@ def _(mo):
 # ─── CELL 5: PART B WIDGETS ──────────────────────────────────────────────────
 
 @app.cell(hide_code=True)
-def _(mo, partA_pred):
-    mo.stop(partA_pred.value is None, mo.md("**Make your prediction above to unlock this part.**"))
-
+def _(mo):
     partB_pred = mo.ui.radio(
         options={
             "A) ~0.1% -- very rare": "0.1",
@@ -305,9 +303,7 @@ def _(mo, partA_pred):
 # ─── CELL 6: PART C WIDGETS ──────────────────────────────────────────────────
 
 @app.cell(hide_code=True)
-def _(mo, partB_pred):
-    mo.stop(partB_pred.value is None, mo.md("**Make your prediction above to unlock this part.**"))
-
+def _(mo):
     partC_pred = mo.ui.number(
         start=20, stop=95, value=85, step=1,
         label="A model deployed without monitoring degrades from 76% over 6 months. What accuracy (%) remains?",
@@ -332,9 +328,7 @@ def _(mo, partB_pred):
 # ─── CELL 7: PART D WIDGETS ──────────────────────────────────────────────────
 
 @app.cell(hide_code=True)
-def _(mo, partC_pred):
-    mo.stop(partC_pred.value is None, mo.md("**Make your prediction above to unlock this part.**"))
-
+def _(mo):
     partD_pred = mo.ui.radio(
         options={
             "A) Adversarial training -- direct defense is always cheapest": "adv_train",
@@ -357,9 +351,7 @@ def _(mo, partC_pred):
 # ─── CELL 8: PART E WIDGETS ──────────────────────────────────────────────────
 
 @app.cell(hide_code=True)
-def _(mo, partD_pred):
-    mo.stop(partD_pred.value is None, mo.md("**Make your prediction above to unlock this part.**"))
-
+def _(mo):
     partE_eps_slider = mo.ui.slider(
         start=0, stop=16, value=4, step=1,
         label="Adversarial perturbation (eps, in units of /255)",

@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.19.6"
+__generated_with = "0.23.1"
 app = marimo.App(width="full")
 
 
@@ -71,7 +71,7 @@ async def _():
 
     ledger = DesignLedger()
     if getattr(ledger, "is_wasm", False):
-        await ledger.load_async()
+        _ = await ledger.load_async()
     return (
         COLORS, LAB_CSS, apply_plotly_theme,
         go, mo, np, math,
@@ -286,9 +286,7 @@ def _(
     return (partA_prediction,)
 
 @app.cell(hide_code=True)
-def _(mo, partA_prediction):
-    mo.stop(partA_prediction.value is None, mo.md("**Make your prediction above to unlock this part.**"))
-
+def _(mo):
     partA_ai = mo.ui.slider(
         start=1, stop=400, value=5, step=1,
         label="Arithmetic Intensity (FLOPs/Byte)",
@@ -309,9 +307,7 @@ def _(mo, partA_prediction):
     return (partB_prediction,)
 
 @app.cell(hide_code=True)
-def _(mo, partB_prediction):
-    mo.stop(partB_prediction.value is None, mo.md("**Make your prediction above to unlock this part.**"))
-
+def _(mo):
     partB_distance = mo.ui.slider(
         start=0, stop=5000, value=1500, step=50,
         label="Datacenter distance (km)",
@@ -336,9 +332,7 @@ def _(mo, partB_prediction):
     return (partC_prediction,)
 
 @app.cell(hide_code=True)
-def _(mo, partC_prediction):
-    mo.stop(partC_prediction.value is None, mo.md("**Make your prediction above to unlock this part.**"))
-
+def _(mo):
     partC_target = mo.ui.dropdown(
         options={
             "Cloud (300W TDP)": "cloud",
@@ -374,8 +368,6 @@ def _(mo, partC_prediction):
 
 @app.cell(hide_code=True)
 def _(mo, partD_prediction):
-    mo.stop(partD_prediction.value is None, mo.md("**Make your prediction above to unlock this part.**"))
-
     partD_data_size = mo.ui.slider(
         start=1, stop=1024, value=16, step=1,
         label="Data size (KB)",

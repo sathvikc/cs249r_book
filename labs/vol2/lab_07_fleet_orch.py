@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.19.6"
+__generated_with = "0.23.1"
 app = marimo.App(width="full")
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -67,7 +67,7 @@ async def _():
     EDGE_TFLOPS = EDGE.compute.peak_flops.m_as("TFLOPs/s")
     ledger = DesignLedger()
     if getattr(ledger, "is_wasm", False):
-        await ledger.load_async()
+        _ = await ledger.load_async()
     return COLORS, LAB_CSS, apply_plotly_theme, go, ledger, math, mo, np, GPUS_PER_NODE, GPU_COST_HR, DecisionLog, Hardware, H100, T4, EDGE, EDGE_TFLOPS
 
 
@@ -220,9 +220,7 @@ def _(mo):
 
 # ─── CELL 5: Part B prediction + controls ────────────────────────────────────
 @app.cell(hide_code=True)
-def _(mo, partA_prediction):
-    mo.stop(partA_prediction.value is None, mo.md("**Make your prediction above to unlock this part.**"))
-
+def _(mo):
     partB_prediction = mo.ui.radio(
         options={
             "A) Yes -- a good scheduler can achieve all three simultaneously": "A",
@@ -250,9 +248,7 @@ def _(mo, partA_prediction):
 
 # ─── CELL 5b: Part C prediction + controls ────────────────────────────────
 @app.cell(hide_code=True)
-def _(mo, partB_reflection):
-    mo.stop(partB_reflection.value is None, mo.md("**Complete Part B reflection to unlock Part C.**"))
-
+def _(mo):
     partC_prediction = mo.ui.radio(
         options={
             "A) Zero cost -- preemption just moves jobs around": "A",
@@ -279,9 +275,7 @@ def _(mo, partB_reflection):
 
 # ─── CELL 5c: Part D prediction + controls ────────────────────────────────
 @app.cell(hide_code=True)
-def _(mo, partC_reflection):
-    mo.stop(partC_reflection.value is None, mo.md("**Complete Part C reflection to unlock Part D.**"))
-
+def _(mo):
     partD_prediction = mo.ui.radio(
         options={
             "A) 30% -- same as single cluster": "A",
